@@ -53,6 +53,11 @@ try {
     console.error("FileRoutes Error", e);
 }
 
+// Health Check
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 // 404 Handler
 app.use((req, res) => {
     console.log(`[404] Route Not Found: ${req.url}`);
