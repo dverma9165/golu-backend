@@ -23,7 +23,12 @@ exports.sendOrderNotification = async (order, product, customerName, utr) => {
                 <p><strong>Amount:</strong> ₹${order.amount}</p>
                 <p><strong>UTR:</strong> ${utr}</p>
                 <br/>
-                <p>Please log in to the admin dashboard to approve this order.</p>
+                <p>
+                    <a href="${process.env.CLIENT_URL || 'https://golu-frontend.onrender.com'}/admin" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                        Approve Order in Dashboard
+                    </a>
+                </p>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">If the button doesn't work, verify at: ${process.env.CLIENT_URL || 'https://golu-frontend.onrender.com'}/admin</p>
             `
         };
 

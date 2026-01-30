@@ -90,14 +90,71 @@ exports.approveOrder = async (req, res) => {
 
 // === PUBLIC / AUTH ACTIONS ===
 
+exports.rejectOrder = async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        const order = await Order.findByIdAndUpdate(
+            orderId,
+            { status: 'Rejected' },
+            { new: true }
+        );
+        // Notify User
+        if (order.user) {
+            notificationService.sendToUser(order.user, {
+                title: 'Order Rejected',
+                body: 'Your order was not approved. Please contact support.',
+                url: `/cart`
+            });
+        }
+        res.json(order);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
 exports.submitOrder = async (req, res) => {
     try {
-        const { productId, customerName, utr } = req.body;
+        console.log('Submit Order Payload:', req.body);
+        const { productId, customerName, utr, cartItems } = req.body;
         const userId = req.user.id;
 
-        const product = await Product.findById(productId);
-        if (!product) return res.status(404).json({ msg: 'Product not found' });
+        // 1. Determine Product(s)
+        let productsToOrder = [];
+        let parsedItemIds = [];
 
+        // Parsing cartItems
+        if (cartItems) {
+            if (Array.isArray(cartItems)) {
+                parsedItemIds = cartItems;
+            } else if (typeof cartItems === 'string') {
+                try {
+                    parsedItemIds = JSON.parse(cartItems);
+                } catch (e) {
+                    console.error("Failed to parse cartItems:", e.message);
+                }
+            }
+        }
+
+        if (parsedItemIds.length > 0) {
+            console.log('Processing Bulk Order. IDs:', parsedItemIds);
+            productsToOrder = await Product.find({ _id: { $in: parsedItemIds } });
+
+            if (productsToOrder.length === 0) {
+                return res.status(404).json({ msg: 'No valid products found for the provided IDs' });
+            }
+        } else {
+            // Fallback to Single Product
+            console.log('Processing Single Order. ID:', productId);
+            if (!productId) {
+                return res.status(400).json({ msg: 'No Product ID or Cart Items provided' });
+            }
+            const product = await Product.findById(productId);
+            if (!product) return res.status(404).json({ msg: 'Product not found' });
+            productsToOrder = [product];
+        }
+
+        // 2. Handle Payment Screenshot
         let screenshotData = {};
         if (req.file) {
             const uploadRes = await driveService.uploadFile(req.file);
@@ -109,39 +166,84 @@ exports.submitOrder = async (req, res) => {
             };
         }
 
-        const newOrder = new Order({
-            user: userId,
-            product: productId,
-            customerName,
-            utr,
-            amount: product.price || 0,
-            paymentScreenshot: screenshotData
-        });
+        // 3. Create Orders
+        const createdOrders = [];
+        let totalAmount = 0;
 
-        await newOrder.save();
+        for (const product of productsToOrder) {
+            // Check for existing order
+            const existingOrder = await Order.findOne({
+                user: userId,
+                product: product._id,
+                status: { $in: ['Pending', 'Approved'] }
+            }).sort({ createdAt: -1 });
 
-        // Notify Admins (Push)
+            if (existingOrder) {
+                if (existingOrder.status === 'Pending') {
+                    // Skip if pending
+                    continue;
+                }
+                if (existingOrder.status === 'Approved') {
+                    // Check expiry (7 Days as requested)
+                    const now = new Date();
+                    const approvedTime = existingOrder.approvedAt ? new Date(existingOrder.approvedAt) : new Date(existingOrder.createdAt);
+                    const diffTime = Math.abs(now - approvedTime);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    if (diffDays <= 7) {
+                        continue; // Skip if owned and not expired
+                    }
+                }
+            }
+
+            const newOrder = new Order({
+                user: userId,
+                product: product._id,
+                customerName,
+                utr,
+                amount: product.price || 0,
+                paymentScreenshot: screenshotData
+            });
+
+            await newOrder.save();
+            createdOrders.push(newOrder);
+            totalAmount += (product.price || 0);
+        }
+
+        if (createdOrders.length === 0) {
+            return res.status(400).json({ msg: 'Order(s) skipped: You already have these items pending or approved.' });
+        }
+
+        // 4. Notifications
+        // Push Notification
         notificationService.sendToAdmins({
             title: 'New Order Received',
-            body: `Order from ${customerName} for ₹${product.price}`,
-            url: '/admin'
+            body: `Order from ${customerName} for ₹${totalAmount} (${createdOrders.length} items)`,
+            url: `${process.env.CLIENT_URL || 'https://golu-frontend.onrender.com'}/admin` // Redirect to Admin Dashboard
         });
 
-        // Notify Admin (Email)
-        console.log('Sending email notification to admin...');
+        // Email Notification
+        // Send email for each order to ensure clarity
         try {
-            await emailService.sendOrderNotification(newOrder, product, customerName, utr);
-            console.log('Email notification step complete.');
+            for (const order of createdOrders) {
+                // Determine product details again for the email
+                const productDetails = productsToOrder.find(p => p._id.toString() === order.product.toString());
+                if (productDetails) {
+                    await emailService.sendOrderNotification(order, productDetails, customerName, utr);
+                }
+            }
         } catch (emailErr) {
             console.error('Failed to send email:', emailErr);
         }
 
-        res.json({ msg: 'Order Submitted', orderId: newOrder._id });
+        res.json({ msg: 'Order(s) Submitted', orderIds: createdOrders.map(o => o._id) });
+
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
     }
-};
+
+}
 
 exports.getMyOrders = async (req, res) => {
     try {

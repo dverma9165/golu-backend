@@ -44,6 +44,7 @@ app.post('/api/auth/login', authController.login);
 // Cart Routes
 app.post('/api/auth/cart', auth, authController.addToCart);
 app.get('/api/auth/cart', auth, authController.getCart);
+app.delete('/api/auth/cart/:productId', auth, authController.removeFromCart);
 
 // File Routes
 try {

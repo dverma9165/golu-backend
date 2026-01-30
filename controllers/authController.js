@@ -155,3 +155,20 @@ exports.getCart = async (req, res) => {
         res.status(500).send('Server Error');
     }
 };
+
+exports.removeFromCart = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        const productId = req.params.productId;
+
+        user.cart = user.cart.filter(item => item.product.toString() !== productId);
+        await user.save();
+
+        // Return updated cart
+        const updatedUser = await User.findById(req.user.id).populate('cart.product');
+        res.json({ cart: updatedUser.cart });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};

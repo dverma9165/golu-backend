@@ -27,6 +27,7 @@ const uploadFields = upload.fields([
 router.post('/upload', isAdmin, uploadFields, fileController.uploadProduct);
 router.get('/orders', isAdmin, fileController.getOrders);
 router.post('/approve', isAdmin, fileController.approveOrder);
+router.post('/reject', isAdmin, fileController.rejectOrder);
 
 // Authenticated Routes
 router.post('/order', auth, upload.single('paymentScreenshot'), fileController.submitOrder);
