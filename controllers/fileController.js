@@ -77,7 +77,7 @@ exports.approveOrder = async (req, res) => {
             notificationService.sendToUser(order.user, {
                 title: 'Order Approved',
                 body: 'Your order has been approved! Click to download.',
-                url: '/my-orders' // Frontend user route
+                url: `/product/${order.product}` // Redirect to the specific product page
             });
         }
 
