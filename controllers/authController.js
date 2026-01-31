@@ -45,8 +45,9 @@ exports.register = async (req, res) => {
 
         res.json({ msg: 'OTP sent to email', userId: pendingUser.id });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
+        console.error("Register Error:", err.message);
+        // Return specific error message for debugging (e.g. Email failure)
+        res.status(500).json({ msg: `Registration Failed: ${err.message}` });
     }
 };
 
