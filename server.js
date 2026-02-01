@@ -1,4 +1,5 @@
-const express = require('express');
+const express = require('express'); // Server entry point
+// Forces restart for new routes
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');

@@ -50,6 +50,25 @@ exports.uploadProduct = async (req, res) => {
     }
 };
 
+exports.deleteProduct = async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) {
+            return res.status(404).json({ msg: 'Product not found' });
+        }
+
+        // Optional: Delete from Google Drive if needed
+        // await driveService.deleteFile(product.thumbnail.googleDriveId);
+        // await driveService.deleteFile(product.sourceFile.googleDriveId);
+
+        await Product.findByIdAndDelete(req.params.id);
+        res.json({ msg: 'Product removed' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
 exports.getOrders = async (req, res) => {
     try {
         const orders = await Order.find().populate('product').sort({ createdAt: -1 });
@@ -247,8 +266,23 @@ exports.submitOrder = async (req, res) => {
 
 exports.getMyOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ user: req.user.id }).populate('product');
-        res.json(orders);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 9; // Default 9 for grid
+        const skip = (page - 1) * limit;
+
+        const total = await Order.countDocuments({ user: req.user.id });
+        const orders = await Order.find({ user: req.user.id })
+            .populate('product')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.json({
+            orders,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page,
+            totalOrders: total
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -302,11 +336,25 @@ exports.getProducts = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 12;
         const skip = (page - 1) * limit;
+        const search = req.query.search || '';
+        const sort = req.query.sort || 'newest';
 
-        const total = await Product.countDocuments();
-        const products = await Product.find()
+        // Build Query
+        const query = {};
+        if (search) {
+            query.title = { $regex: search, $options: 'i' };
+        }
+
+        // Build Sort
+        let sortOption = { createdAt: -1 }; // Default Newest
+        if (sort === 'oldest') {
+            sortOption = { createdAt: 1 };
+        }
+
+        const total = await Product.countDocuments(query);
+        const products = await Product.find(query)
             .select('-sourceFile')
-            .sort({ createdAt: -1 })
+            .sort(sortOption)
             .skip(skip)
             .limit(limit);
 
@@ -330,6 +378,66 @@ exports.getProductById = async (req, res) => {
     } catch (err) {
         console.error(err);
         if (err.kind === 'ObjectId') return res.status(404).json({ msg: 'Product not found' });
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.addReview = async (req, res) => {
+    try {
+        const { rating, comment } = req.body;
+        const productId = req.params.id;
+
+        // 1. Verify User Purchased & Approved
+        const order = await Order.findOne({
+            user: req.user.id,
+            product: productId,
+            status: 'Approved'
+        });
+
+        if (!order) {
+            return res.status(403).json({ msg: 'You can only review products you have purchased and that have been approved.' });
+        }
+
+        const product = await Product.findById(productId);
+        if (!product) return res.status(404).json({ msg: 'Product not found' });
+
+        // Check if already reviewed
+        const alreadyReviewed = product.reviews.find(
+            r => r.user.toString() === req.user.id.toString()
+        );
+
+        if (alreadyReviewed) {
+            return res.status(400).json({ msg: 'You have already reviewed this product' });
+        }
+
+        const review = {
+            name: req.user.name || 'User', // Provided by auth middleware if populated? Or assume User model has name. 
+            // Better fetch name from User model if needed, but req.user usually has id. 
+            // Let's assume req.user might not have name if token payload only has id.
+            // But auth middleware does: req.user = decoded.user.
+            // Let's fetch user name to be safe.
+            user: req.user.id,
+            rating: Number(rating),
+            comment,
+            date: Date.now()
+        };
+
+        // Get user name
+        const user = await require('../models/User').findById(req.user.id);
+        if (user) review.name = user.name;
+
+        product.reviews.push(review);
+
+        product.numReviews = product.reviews.length;
+        product.rating =
+            product.reviews.reduce((acc, item) => item.rating + acc, 0) /
+            product.reviews.length;
+
+        await product.save();
+        res.status(201).json({ msg: 'Review added' });
+
+    } catch (err) {
+        console.error(err);
         res.status(500).send('Server Error');
     }
 };

@@ -1,13 +1,17 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com', // Explicit host
+    port: 465, // Explicit port for secure connection
+    secure: true, // true for 465, false for other ports
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    debug: true, // Show debug output
-    logger: true // Log information to console
+    connectionTimeout: 10000, // 10 seconds
+    socketTimeout: 10000, // 10 seconds
+    debug: true,
+    logger: true
 });
 
 exports.sendOrderNotification = async (order, product, customerName, utr) => {

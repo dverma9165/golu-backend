@@ -149,8 +149,22 @@ exports.addToCart = async (req, res) => {
 
 exports.getCart = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
         const user = await User.findById(req.user.id).populate('cart.product');
-        res.json({ cart: user.cart });
+
+        // Pagination for embedded array
+        const totalItems = user.cart.length;
+        const paginatedCart = user.cart.slice(skip, skip + limit);
+
+        res.json({
+            cart: paginatedCart,
+            totalPages: Math.ceil(totalItems / limit),
+            currentPage: page,
+            totalItems: totalItems
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');

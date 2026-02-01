@@ -19,4 +19,8 @@ router.post('/cart', auth, authController.addToCart);
 // @access  Private
 router.get('/cart', auth, authController.getCart);
 
+// @route   DELETE api/auth/cart/:productId
+// @access  Private
+router.delete('/cart/:productId', auth, authController.removeFromCart);
+
 module.exports = router;

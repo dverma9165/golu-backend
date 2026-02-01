@@ -28,11 +28,14 @@ router.post('/upload', isAdmin, uploadFields, fileController.uploadProduct);
 router.get('/orders', isAdmin, fileController.getOrders);
 router.post('/approve', isAdmin, fileController.approveOrder);
 router.post('/reject', isAdmin, fileController.rejectOrder);
+router.delete('/:id', isAdmin, fileController.deleteProduct);
+router.get('/all-products', isAdmin, fileController.getProducts);
 
 // Authenticated Routes
 router.post('/order', auth, upload.single('paymentScreenshot'), fileController.submitOrder);
 router.get('/my-orders', auth, fileController.getMyOrders);
 router.post('/download', auth, fileController.downloadPaid);
+router.post('/review/:id', auth, fileController.addReview);
 
 // Public Routes
 router.get('/', fileController.getProducts);

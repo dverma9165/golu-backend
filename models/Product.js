@@ -25,7 +25,7 @@ const ProductSchema = new mongoose.Schema({
         type: String,
         default: 'No'
     },
-    
+
     // Thumbnail (Public)
     thumbnail: {
         originalName: String,
@@ -33,7 +33,7 @@ const ProductSchema = new mongoose.Schema({
         googleDriveId: String,
         viewLink: String
     },
-    
+
     // Main Source File (Private/Paid)
     sourceFile: {
         originalName: String,
@@ -46,6 +46,38 @@ const ProductSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+
+    // Reviews
+    reviews: [
+        {
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'user'
+            },
+            name: {
+                type: String
+            },
+            rating: {
+                type: Number,
+                required: true
+            },
+            comment: {
+                type: String
+            },
+            date: {
+                type: Date,
+                default: Date.now
+            }
+        }
+    ],
+    rating: {
+        type: Number,
+        default: 0
+    },
+    numReviews: {
+        type: Number,
+        default: 0
     }
 });
 
