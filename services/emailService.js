@@ -1,36 +1,17 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail', // Standard Gmail service
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false // Helps avoid SSL errors on some cloud envs
-    },
-    // CRITICAL FIX: Force IPv4 as IPv6 often times out on Docker/Render
-    family: 4,
-    connectionTimeout: 20000,
-    socketTimeout: 20000,
-    debug: true,
-    logger: true
-});
+// Initialize Resend Client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify connection configuration on startup
-transporter.verify(function (error, success) {
-    if (error) {
-        console.error('CRITICAL: Email Service Connection Failed:', error);
-    } else {
-        console.log('Email Service is ready to take messages');
-    }
-});
+// Default sender for testing (works only to the account owner's email)
+// Once domain is verified, this can be changed to 'Admin <admin@yourdomain.com>'
+const DEFAULT_SENDER = 'onboarding@resend.dev';
 
 exports.sendOrderNotification = async (order, product, customerName, utr) => {
     try {
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: 'deepeshv9926@gmail.com', // Admin Email to receive notifications
+        const { data, error } = await resend.emails.send({
+            from: DEFAULT_SENDER,
+            to: 'deepeshv9926@gmail.com', // Admin Email
             subject: `New Order Received: ₹${order.amount} - ${customerName}`,
             html: `
                 <h2>New Order Received</h2>
@@ -44,23 +25,30 @@ exports.sendOrderNotification = async (order, product, customerName, utr) => {
                         Approve Order in Dashboard
                     </a>
                 </p>
-                <p style="margin-top: 10px; font-size: 12px; color: #666;">If the button doesn't work, verify at: ${process.env.CLIENT_URL || 'https://golu-frontend.onrender.com'}/admin</p>
             `
-        };
+        });
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully: ' + info.response);
-        return info;
+        if (error) {
+            console.error('RESEND ERROR:', error);
+            throw new Error(error.message);
+        }
+
+        console.log('Order Notification Sent:', data);
+        return data;
     } catch (error) {
         console.error('CRITICAL EMAIL ERROR:', error);
-        throw error; // Re-throw to be caught by controller
+        throw error;
     }
 };
 
 exports.sendOtp = async (email, otp) => {
     try {
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
+        console.log(`Attempting to send OTP to ${email} via Resend...`);
+
+        // Note: 'onboarding@resend.dev' can only send to the email address you signed up with on Resend.
+        // For production, you MUST verify your domain in Resend dashboard.
+        const { data, error } = await resend.emails.send({
+            from: DEFAULT_SENDER,
             to: email,
             subject: 'Your OTP Code',
             html: `
@@ -68,11 +56,19 @@ exports.sendOtp = async (email, otp) => {
                 <p>Your OTP code is: <strong>${otp}</strong></p>
                 <p>This code will expire in 10 minutes.</p>
             `
-        };
+        });
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('OTP Email sent successfully: ' + info.response);
-        return info;
+        if (error) {
+            console.error('RESEND ERROR:', error);
+            // Resend specific error for "test mode" restriction
+            if (error.message.includes("can only send to yourself")) {
+                throw new Error("Resend Test Mode: You can only send to your own email until you verify a domain.");
+            }
+            throw new Error(error.message);
+        }
+
+        console.log('OTP Email Sent:', data);
+        return data;
     } catch (error) {
         console.error('CRITICAL EMAIL ERROR:', error);
         throw error;
