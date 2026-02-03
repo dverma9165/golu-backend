@@ -22,10 +22,13 @@ app.use((req, res, next) => {
 });
 
 // Connect Database
-if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI)
+const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+if (!dbUri) {
+    console.error('CRITICAL: MONGODB_URI or MONGO_URI environment variable is not defined.');
+} else {
+    mongoose.connect(dbUri)
         .then(() => console.log('MongoDB Connected'))
-        .catch(err => console.log(err));
+        .catch(err => console.log('MongoDB Connection Error:', err));
 }
 
 // --- INLINE AUTH ROUTES ---

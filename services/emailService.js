@@ -1,15 +1,19 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com', // Explicit host
-    port: 465, // Explicit port for secure connection
-    secure: true, // true for 465, false for other ports
+    service: 'gmail', // Use 'gmail' service shorthand which automatically sets host/port
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    connectionTimeout: 10000, // 10 seconds
-    socketTimeout: 10000, // 10 seconds
+    // host: 'smtp.gmail.com', 
+    // port: 587,
+    // secure: false, // true for 465, false for other ports
+    tls: {
+        rejectUnauthorized: false // Helps with self-signed certs or connection issues in some envs
+    },
+    connectionTimeout: 20000, // Increased to 20 seconds
+    socketTimeout: 20000, // Increased to 20 seconds
     debug: true,
     logger: true
 });
