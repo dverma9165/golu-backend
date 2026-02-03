@@ -1,9 +1,7 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com', // Explicit host for clarity
-    port: 587, // Standard STARTTLS port
-    secure: false, // Must be false for port 587
+    service: 'gmail', // Standard Gmail service
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -11,6 +9,8 @@ const transporter = nodemailer.createTransport({
     tls: {
         rejectUnauthorized: false // Helps avoid SSL errors on some cloud envs
     },
+    // CRITICAL FIX: Force IPv4 as IPv6 often times out on Docker/Render
+    family: 4,
     connectionTimeout: 20000,
     socketTimeout: 20000,
     debug: true,
