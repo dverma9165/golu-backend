@@ -1,7 +1,14 @@
 const { Resend } = require('resend');
 
 // Initialize Resend Client
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend;
+if (!process.env.RESEND_API_KEY) {
+    console.error("CRITICAL WARNING: RESEND_API_KEY is missing from environment variables. Email sending will fail.");
+    // Dummy initialization to prevent immediate crash, though calls will fail
+    resend = { emails: { send: async () => ({ error: { message: "RESEND_API_KEY is missing" } }) } };
+} else {
+    resend = new Resend(process.env.RESEND_API_KEY);
+}
 
 // Default sender for testing (works only to the account owner's email)
 // Once domain is verified, this can be changed to 'Admin <admin@yourdomain.com>'
