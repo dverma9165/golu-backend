@@ -1,21 +1,29 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Use 'gmail' service shorthand which automatically sets host/port
+    host: 'smtp.gmail.com', // Explicit host for clarity
+    port: 587, // Standard STARTTLS port
+    secure: false, // Must be false for port 587
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    // host: 'smtp.gmail.com', 
-    // port: 587,
-    // secure: false, // true for 465, false for other ports
     tls: {
-        rejectUnauthorized: false // Helps with self-signed certs or connection issues in some envs
+        rejectUnauthorized: false // Helps avoid SSL errors on some cloud envs
     },
-    connectionTimeout: 20000, // Increased to 20 seconds
-    socketTimeout: 20000, // Increased to 20 second
+    connectionTimeout: 20000,
+    socketTimeout: 20000,
     debug: true,
     logger: true
+});
+
+// Verify connection configuration on startup
+transporter.verify(function (error, success) {
+    if (error) {
+        console.error('CRITICAL: Email Service Connection Failed:', error);
+    } else {
+        console.log('Email Service is ready to take messages');
+    }
 });
 
 exports.sendOrderNotification = async (order, product, customerName, utr) => {

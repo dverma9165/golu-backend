@@ -9,10 +9,12 @@ exports.register = async (req, res) => {
     const { name, email, phone, password } = req.body;
 
     try {
+        console.log("Register: Checking if user exists...");
         // Check Main User Collection
         let user = await User.findOne({ email });
         if (user) return res.status(400).json({ msg: 'User already exists' });
 
+        console.log("Register: Generating OTP...");
         // Generate OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -20,6 +22,7 @@ exports.register = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        console.log("Register: Saving/Updating PendingUser...");
         // Save/Update Pending User
         // If email exists in pending, update it. If not, create new.
         let pendingUser = await PendingUser.findOne({ email });
@@ -40,9 +43,11 @@ exports.register = async (req, res) => {
             await pendingUser.save();
         }
 
+        console.log("Register: Sending OTP via Email...");
         // Send OTP
         try {
             await emailService.sendOtp(email, otp);
+            console.log("Register: OTP Sent successfully.");
         } catch (emailError) {
             console.error("Email Sending Failed:", emailError);
             return res.status(500).json({ msg: `Registration Failed: Email Service Error - ${emailError.message}` });
