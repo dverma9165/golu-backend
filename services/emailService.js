@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
         rejectUnauthorized: false // Helps with self-signed certs or connection issues in some envs
     },
     connectionTimeout: 20000, // Increased to 20 seconds
-    socketTimeout: 20000, // Increased to 20 seconds
+    socketTimeout: 20000, // Increased to 20 second
     debug: true,
     logger: true
 });
