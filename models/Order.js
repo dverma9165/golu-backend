@@ -16,7 +16,7 @@ const OrderSchema = new mongoose.Schema({
     },
     utr: {
         type: String,
-        required: true
+        required: false // Made optional for online payments (or filled with paymentId)
     },
     amount: {
         type: Number,
@@ -28,6 +28,16 @@ const OrderSchema = new mongoose.Schema({
         downloadLink: String,
         mimeType: String
     },
+    // Coupon Details
+    couponCode: { type: String },
+    discountAmount: { type: Number, default: 0 },
+
+    // Razorpay Fields
+    // Razorpay Fields
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
+
     status: {
         type: String,
         default: 'Pending',

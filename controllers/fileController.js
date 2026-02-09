@@ -25,6 +25,8 @@ exports.uploadProduct = async (req, res) => {
             version: req.body.version,
             fileType: req.body.fileType,
             fontsIncluded: req.body.fontsIncluded,
+            category: req.body.category,
+
 
             thumbnail: {
                 originalName: thumbnail[0].originalname,
@@ -53,16 +55,23 @@ exports.uploadProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
     try {
         const product = await Product.findById(req.params.id);
-        if (!product) {
-            return res.status(404).json({ msg: 'Product not found' });
+        if (!product) return res.status(404).json({ msg: 'Product not found' });
+
+        // Delete from Google Drive
+        try {
+            if (product.thumbnail && product.thumbnail.googleDriveId) {
+                await driveService.deleteFile(product.thumbnail.googleDriveId);
+            }
+            if (product.sourceFile && product.sourceFile.googleDriveId) {
+                await driveService.deleteFile(product.sourceFile.googleDriveId);
+            }
+        } catch (driveErr) {
+            console.error('Error deleting file from Google Drive:', driveErr);
+            // Continue to delete from DB even if Drive delete fails
         }
 
-        // Optional: Delete from Google Drive if needed
-        // await driveService.deleteFile(product.thumbnail.googleDriveId);
-        // await driveService.deleteFile(product.sourceFile.googleDriveId);
-
         await Product.findByIdAndDelete(req.params.id);
-        res.json({ msg: 'Product removed' });
+        res.json({ msg: 'Product and associated files removed' });
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -342,8 +351,60 @@ exports.getProducts = async (req, res) => {
         // Build Query
         const query = {};
         if (search) {
-            query.title = { $regex: search, $options: 'i' };
+            const searchRegex = { $regex: search, $options: 'i' };
+            const orConditions = [
+                { title: searchRegex },
+                { category: searchRegex },
+                { fileType: searchRegex },
+                { description: searchRegex } // Included description in search
+            ];
+
+            // If user searches for 'font', explicitly include products with fonts
+            if (search.toLowerCase().includes('font')) {
+                orConditions.push({ fontsIncluded: 'Yes' });
+            }
+
+            // If user searches for a number, try to match price
+            const searchNum = Number(search);
+            if (!isNaN(searchNum)) {
+                orConditions.push({ price: searchNum });
+                orConditions.push({ salePrice: searchNum });
+            }
+
+            query.$or = orConditions;
         }
+        if (req.query.category && req.query.category !== 'All') {
+            query.category = req.query.category;
+        }
+
+        // Price Filter
+        // Price Filter
+        if (req.query.priceRange && req.query.priceRange !== 'All') {
+            const range = req.query.priceRange;
+            if (range === 'Custom') {
+                const min = req.query.minPrice ? Number(req.query.minPrice) : 0;
+                const max = req.query.maxPrice ? Number(req.query.maxPrice) : Infinity;
+                if (!isNaN(min) || !isNaN(max)) {
+                    query.price = {};
+                    if (!isNaN(min)) query.price.$gte = min;
+                    if (!isNaN(max) && max !== Infinity) query.price.$lte = max;
+                }
+            } else if (range === 'Free') {
+                query.price = 0;
+            } else if (range.includes('-')) {
+                const [min, max] = range.split('-').map(Number);
+                if (!isNaN(min) && !isNaN(max)) {
+                    query.price = { $gte: min, $lte: max };
+                }
+            } else if (range.endsWith('+')) { // 500+
+                const min = Number(range.replace('+', ''));
+                if (!isNaN(min)) {
+                    query.price = { $gt: min };
+                }
+            }
+        }
+
+
 
         // Build Sort
         let sortOption = { createdAt: -1 }; // Default Newest

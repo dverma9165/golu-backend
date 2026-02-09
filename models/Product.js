@@ -25,6 +25,11 @@ const ProductSchema = new mongoose.Schema({
         type: String,
         default: 'No'
     },
+    category: {
+        type: String,
+        required: true,
+        default: 'Uncategorized'
+    },
 
     // Thumbnail (Public)
     thumbnail: {

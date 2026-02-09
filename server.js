@@ -54,6 +54,7 @@ app.delete('/api/auth/cart/:productId', auth, authController.removeFromCart);
 try {
     app.use('/api/files', require('./routes/fileRoutes'));
     app.use('/api/notifications', require('./routes/notificationRoutes'));
+    app.use('/api/payment', require('./routes/paymentRoutes')); // Added Payment Routes
 } catch (e) {
     console.error("FileRoutes Error", e);
 }
