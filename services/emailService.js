@@ -68,8 +68,12 @@ exports.sendOtp = async (email, otp) => {
         if (error) {
             console.error('RESEND ERROR:', error);
             // Resend specific error for "test mode" restriction
-            if (error.message.includes("can only send to yourself")) {
-                throw new Error("Resend Test Mode: You can only send to your own email until you verify a domain.");
+            // We allow this to pass so people can test signup in dev mode
+            if (error.message && (error.message.includes("can only send to yourself") || error.message.includes("verify a domain"))) {
+                console.log("==================================================================");
+                console.log(`[DEV MODE] Resend Restriction Caught. OTP for ${email} is: ${otp}`);
+                console.log("==================================================================");
+                return { id: 'mock-id', from: DEFAULT_SENDER, to: email };
             }
             throw new Error(error.message);
         }
