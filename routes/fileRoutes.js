@@ -39,6 +39,7 @@ router.post('/review/:id', auth, fileController.addReview);
 
 // Public Routes
 router.get('/', fileController.getProducts);
+router.get('/feed', fileController.getFeedSections);
 router.get('/:id', fileController.getProductById);
 
 module.exports = router;

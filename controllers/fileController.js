@@ -377,39 +377,124 @@ exports.getProducts = async (req, res) => {
             query.category = req.query.category;
         }
 
-        // Price Filter
-        // Price Filter
+        // Price Filter (considers both price and salePrice)
         if (req.query.priceRange && req.query.priceRange !== 'All') {
             const range = req.query.priceRange;
             if (range === 'Custom') {
                 const min = req.query.minPrice ? Number(req.query.minPrice) : 0;
                 const max = req.query.maxPrice ? Number(req.query.maxPrice) : Infinity;
-                if (!isNaN(min) || !isNaN(max)) {
-                    query.price = {};
-                    if (!isNaN(min)) query.price.$gte = min;
-                    if (!isNaN(max) && max !== Infinity) query.price.$lte = max;
+                const priceCondition = {};
+                if (!isNaN(min)) priceCondition.$gte = min;
+                if (!isNaN(max) && max !== Infinity) priceCondition.$lte = max;
+                if (Object.keys(priceCondition).length > 0) {
+                    query.$or = query.$or || [];
+                    // Use $and to combine with any existing $or from search
+                    const searchOr = query.$or.length ? [...query.$or] : null;
+                    delete query.$or;
+                    const priceFilter = {
+                        $or: [
+                            { salePrice: { $exists: true, $ne: null, ...priceCondition } },
+                            { $and: [{ $or: [{ salePrice: { $exists: false } }, { salePrice: null }] }, { price: priceCondition }] }
+                        ]
+                    };
+                    if (searchOr) {
+                        query.$and = [{ $or: searchOr }, priceFilter];
+                    } else {
+                        Object.assign(query, priceFilter);
+                    }
                 }
             } else if (range === 'Free') {
-                query.price = 0;
+                // Match products where effective price is 0 (salePrice=0 or price=0 with no salePrice)
+                const freeFilter = {
+                    $or: [
+                        { salePrice: 0 },
+                        { price: 0 }
+                    ]
+                };
+                const searchOr = query.$or;
+                if (searchOr) {
+                    delete query.$or;
+                    query.$and = [{ $or: searchOr }, freeFilter];
+                } else {
+                    Object.assign(query, freeFilter);
+                }
             } else if (range.includes('-')) {
                 const [min, max] = range.split('-').map(Number);
                 if (!isNaN(min) && !isNaN(max)) {
-                    query.price = { $gte: min, $lte: max };
+                    const priceCondition = { $gte: min, $lte: max };
+                    const priceFilter = {
+                        $or: [
+                            { salePrice: { $exists: true, $ne: null, ...priceCondition } },
+                            { $and: [{ $or: [{ salePrice: { $exists: false } }, { salePrice: null }] }, { price: priceCondition }] }
+                        ]
+                    };
+                    const searchOr = query.$or;
+                    if (searchOr) {
+                        delete query.$or;
+                        query.$and = [{ $or: searchOr }, priceFilter];
+                    } else {
+                        Object.assign(query, priceFilter);
+                    }
                 }
             } else if (range.endsWith('+')) { // 500+
                 const min = Number(range.replace('+', ''));
                 if (!isNaN(min)) {
-                    query.price = { $gt: min };
+                    const priceCondition = { $gt: min };
+                    const priceFilter = {
+                        $or: [
+                            { salePrice: { $exists: true, $ne: null, ...priceCondition } },
+                            { $and: [{ $or: [{ salePrice: { $exists: false } }, { salePrice: null }] }, { price: priceCondition }] }
+                        ]
+                    };
+                    const searchOr = query.$or;
+                    if (searchOr) {
+                        delete query.$or;
+                        query.$and = [{ $or: searchOr }, priceFilter];
+                    } else {
+                        Object.assign(query, priceFilter);
+                    }
                 }
             }
         }
 
+        // File Type Filter (Multiple Selection Support)
+        if (req.query.fileType && req.query.fileType !== 'All') {
+            const fileTypes = Array.isArray(req.query.fileType)
+                ? req.query.fileType
+                : req.query.fileType.split(',');
+            query.fileType = { $in: fileTypes };
+        }
 
+        // Version Filter
+        if (req.query.version && req.query.version !== 'All') {
+            query.version = req.query.version;
+        }
+
+        // Fonts Included Filter
+        if (req.query.fontsIncluded && req.query.fontsIncluded !== 'All') {
+            query.fontsIncluded = req.query.fontsIncluded;
+        }
 
         // Build Sort
         let sortOption = { createdAt: -1 }; // Default Newest
-        if (sort === 'oldest') {
-            sortOption = { createdAt: 1 };
+        switch (sort) {
+            case 'oldest':
+                sortOption = { createdAt: 1 };
+                break;
+            case 'price-low':
+                sortOption = { price: 1 };
+                break;
+            case 'price-high':
+                sortOption = { price: -1 };
+                break;
+            case 'rating-high':
+                sortOption = { rating: -1 };
+                break;
+            case 'rating-low':
+                sortOption = { rating: 1 };
+                break;
+            default:
+                sortOption = { createdAt: -1 };
         }
 
         const total = await Product.countDocuments(query);
@@ -499,6 +584,89 @@ exports.addReview = async (req, res) => {
 
     } catch (err) {
         console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+// === FEED SECTIONS (single endpoint for all home feed data) ===
+exports.getFeedSections = async (req, res) => {
+    try {
+        const limit = 10;
+
+        // Define all feed sections with their queries and sorts
+        const sectionDefs = [
+            // ── Curated / Smart Sections ──
+            { id: 'newest', query: {}, sort: { createdAt: -1 } },
+            { id: 'toprated', query: { rating: { $gte: 3 } }, sort: { rating: -1 } },
+            { id: 'mostreviewed', query: { numReviews: { $gte: 1 } }, sort: { numReviews: -1 } },
+            { id: 'free', query: { $or: [{ salePrice: 0 }, { price: 0 }] }, sort: { createdAt: -1 } },
+            { id: 'under10', query: { $or: [{ salePrice: { $gt: 0, $lte: 10 } }, { $and: [{ salePrice: null }, { price: { $gt: 0, $lte: 10 } }] }] }, sort: { createdAt: -1 } },
+            { id: 'under20', query: { $or: [{ salePrice: { $gt: 0, $lte: 20 } }, { $and: [{ salePrice: null }, { price: { $gt: 0, $lte: 20 } }] }] }, sort: { rating: -1 } },
+            { id: 'under50', query: { $or: [{ salePrice: { $gt: 0, $lte: 50 } }, { $and: [{ salePrice: null }, { price: { $gt: 0, $lte: 50 } }] }] }, sort: { rating: -1 } },
+            { id: 'premium', query: { $or: [{ salePrice: { $gte: 100 } }, { $and: [{ salePrice: null }, { price: { $gte: 100 } }] }] }, sort: { rating: -1 } },
+            { id: 'discounted', query: { salePrice: { $exists: true, $ne: null, $gt: 0 } }, sort: { createdAt: -1 } },
+            { id: 'withfonts', query: { fontsIncluded: 'Yes' }, sort: { createdAt: -1 } },
+            { id: 'priceLow', query: { price: { $gt: 0 } }, sort: { price: 1 } },
+
+            // ── Category Sections ──
+            { id: 'wedding', query: { category: 'Wedding Card' }, sort: { createdAt: -1 } },
+            { id: 'visiting', query: { category: 'Visiting Card' }, sort: { createdAt: -1 } },
+            { id: 'invitation', query: { category: 'Invitation Card' }, sort: { createdAt: -1 } },
+            { id: 'birthday', query: { category: 'Birthday Banner' }, sort: { createdAt: -1 } },
+            { id: 'festival', query: { category: 'Festival Post' }, sort: { createdAt: -1 } },
+            { id: 'political', query: { category: 'Political Banner' }, sort: { createdAt: -1 } },
+            { id: 'social', query: { category: 'Social Media Post' }, sort: { createdAt: -1 } },
+            { id: 'flyer', query: { category: 'Business Flyer' }, sort: { createdAt: -1 } },
+            { id: 'logo', query: { category: 'Logo Design' }, sort: { createdAt: -1 } },
+            { id: 'letterhead', query: { category: 'Letterhead' }, sort: { createdAt: -1 } },
+            { id: 'billbook', query: { category: 'Bill Book' }, sort: { createdAt: -1 } },
+            { id: 'pamphlet', query: { category: 'Pamphlet' }, sort: { createdAt: -1 } },
+            { id: 'brochure', query: { category: 'Brochure' }, sort: { createdAt: -1 } },
+            { id: 'menu', query: { category: 'Menu Card' }, sort: { createdAt: -1 } },
+            { id: 'certificate', query: { category: 'Certificate' }, sort: { createdAt: -1 } },
+            { id: 'resume', query: { category: 'Resume/CV' }, sort: { createdAt: -1 } },
+            { id: 'calendar', query: { category: 'Calendar' }, sort: { createdAt: -1 } },
+            { id: 'sticker', query: { category: 'Sticker/Label' }, sort: { createdAt: -1 } },
+            { id: 'idcard', query: { category: 'ID Card' }, sort: { createdAt: -1 } },
+            { id: 'poster', query: { category: 'Poster' }, sort: { createdAt: -1 } },
+            { id: 'thumbnail', query: { category: 'Thumbnail' }, sort: { createdAt: -1 } },
+            { id: 'webbanner', query: { category: 'Web Banner' }, sort: { createdAt: -1 } },
+            { id: 'infographic', query: { category: 'Infographic' }, sort: { createdAt: -1 } },
+            { id: 'presentation', query: { category: 'Presentation' }, sort: { createdAt: -1 } },
+            { id: 'ebook', query: { category: 'E-Book Cover' }, sort: { createdAt: -1 } },
+            { id: 'tshirt', query: { category: 'T-Shirt Design' }, sort: { createdAt: -1 } },
+            { id: 'mug', query: { category: 'Mug Design' }, sort: { createdAt: -1 } },
+            { id: 'standee', query: { category: 'Standee' }, sort: { createdAt: -1 } },
+            { id: 'flex', query: { category: 'Flex Banner' }, sort: { createdAt: -1 } },
+            { id: 'envelope', query: { category: 'Envelope' }, sort: { createdAt: -1 } },
+
+            // ── File Type Sections ──
+            { id: 'cdr', query: { fileType: 'CDR' }, sort: { createdAt: -1 } },
+            { id: 'psd', query: { fileType: 'PSD' }, sort: { createdAt: -1 } },
+            { id: 'ai', query: { fileType: 'AI' }, sort: { createdAt: -1 } },
+            { id: 'pdf', query: { fileType: 'PDF' }, sort: { createdAt: -1 } },
+        ];
+
+        // Run all queries in parallel
+        const results = await Promise.all(
+            sectionDefs.map(async (sec) => {
+                const items = await Product.find(sec.query)
+                    .select('-sourceFile')
+                    .sort(sec.sort)
+                    .limit(limit);
+                return { id: sec.id, items };
+            })
+        );
+
+        // Convert to object { sectionId: [items] }
+        const sections = {};
+        results.forEach(r => {
+            sections[r.id] = r.items;
+        });
+
+        res.json({ sections });
+    } catch (err) {
+        console.error('Feed sections error:', err);
         res.status(500).send('Server Error');
     }
 };

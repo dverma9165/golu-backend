@@ -67,13 +67,15 @@ exports.sendOtp = async (email, otp) => {
 
         if (error) {
             console.error('RESEND ERROR:', error);
-            // Resend specific error for "test mode" restriction
-            // We allow this to pass so people can test signup in dev mode
+            // Check for domain verification error
             if (error.message && (error.message.includes("can only send to yourself") || error.message.includes("verify a domain"))) {
-                console.log("==================================================================");
-                console.log(`[DEV MODE] Resend Restriction Caught. OTP for ${email} is: ${otp}`);
-                console.log("==================================================================");
-                return { id: 'mock-id', from: DEFAULT_SENDER, to: email };
+                console.error("==================================================================");
+                console.error(`[CRITICAL] Resend Domain Verification Required!`);
+                console.error(`You are trying to send an email to '${email}' but your Resend domain is not verified.`);
+                console.error(`In 'Test Mode', you can ONLY send emails to the address you signed up with.`);
+                console.error(`Please verify your domain at https://resend.com/domains or use your registered email for testing.`);
+                console.error("==================================================================");
+                throw new Error(`Email Failed: Domain not verified. You can only send to your own email in test mode.`);
             }
             throw new Error(error.message);
         }
