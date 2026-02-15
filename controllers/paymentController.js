@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const Coupon = require('../models/Coupon');
 const notificationService = require('../services/notificationService');
 const emailService = require('../services/emailService');
 
@@ -80,9 +81,24 @@ exports.createOrder = async (req, res) => {
         }
 
         // 2. Apply Coupon Logic
-        if (couponCode === 'DIKSHA99') {
-            discountAmount = Math.round(totalAmount * 0.25); // 25% Discount
-            totalAmount = totalAmount - discountAmount;
+        if (couponCode) {
+            // Check if user has already used this coupon
+            const usedCoupon = await Order.findOne({
+                user: userId,
+                couponCode: couponCode,
+                status: 'Approved'
+            });
+
+            if (usedCoupon) {
+                return res.status(400).json({ msg: 'You have already used this coupon.' });
+            }
+
+            const coupon = await Coupon.findOne({ code: couponCode });
+            if (coupon) {
+                const discountPercent = coupon.discountPercent || 0;
+                discountAmount = Math.round(totalAmount * (discountPercent / 100));
+                totalAmount = Math.max(1, totalAmount - discountAmount);
+            }
         }
 
         if (totalAmount < 1) totalAmount = 1; // Minimum for Razorpay

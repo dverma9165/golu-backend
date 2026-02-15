@@ -35,6 +35,7 @@ router.get('/all-products', isAdmin, fileController.getProducts);
 router.post('/order', auth, upload.single('paymentScreenshot'), fileController.submitOrder);
 router.get('/my-orders', auth, fileController.getMyOrders);
 router.post('/download', auth, fileController.downloadPaid);
+router.post('/download-free', auth, fileController.downloadFree);
 router.post('/review/:id', auth, fileController.addReview);
 
 // Public Routes

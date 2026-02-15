@@ -1,22 +1,22 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
-// Initialize Resend Client
-let resend;
-if (!process.env.RESEND_API_KEY) {
-    console.error("CRITICAL WARNING: RESEND_API_KEY is missing from environment variables. Email sending will fail.");
-    // Dummy initialization to prevent immediate crash, though calls will fail
-    resend = { emails: { send: async () => ({ error: { message: "RESEND_API_KEY is missing" } }) } };
-} else {
-    resend = new Resend(process.env.RESEND_API_KEY);
-}
+// Initialize Nodemailer Transporter
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT, // 587
+    secure: false, // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+    },
+});
 
-// Default sender for testing (works only to the account owner's email)
-// Once domain is verified, this can be changed to 'Admin <admin@yourdomain.com>'
-const DEFAULT_SENDER = 'onboarding@resend.dev';
+// Default sender
+const DEFAULT_SENDER = `"Diksha Design" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`;
 
 exports.sendOrderNotification = async (order, product, customerName, utr) => {
     try {
-        const { data, error } = await resend.emails.send({
+        const info = await transporter.sendMail({
             from: DEFAULT_SENDER,
             to: 'deepeshv9926@gmail.com', // Admin Email
             subject: `New Order Received: ₹${order.amount} - ${customerName}`,
@@ -32,29 +32,22 @@ exports.sendOrderNotification = async (order, product, customerName, utr) => {
                         Approve Order in Dashboard
                     </a>
                 </p>
-            `
+            `,
         });
 
-        if (error) {
-            console.error('RESEND ERROR:', error);
-            throw new Error(error.message);
-        }
-
-        console.log('Order Notification Sent:', data);
-        return data;
+        console.log('Order Notification Sent:', info.messageId);
+        return info;
     } catch (error) {
-        console.error('CRITICAL EMAIL ERROR:', error);
+        console.error('CRITICAL EMAIL ERROR (Order Notification):', error);
         throw error;
     }
 };
 
 exports.sendOtp = async (email, otp) => {
     try {
-        console.log(`Attempting to send OTP to ${email} via Resend...`);
+        console.log(`Attempting to send OTP to ${email} via Brevo SMTP...`);
 
-        // Note: 'onboarding@resend.dev' can only send to the email address you signed up with on Resend.
-        // For production, you MUST verify your domain in Resend dashboard.
-        const { data, error } = await resend.emails.send({
+        const info = await transporter.sendMail({
             from: DEFAULT_SENDER,
             to: email,
             subject: 'Your OTP Code',
@@ -62,28 +55,13 @@ exports.sendOtp = async (email, otp) => {
                 <h2>Your OTP Code</h2>
                 <p>Your OTP code is: <strong>${otp}</strong></p>
                 <p>This code will expire in 10 minutes.</p>
-            `
+            `,
         });
 
-        if (error) {
-            console.error('RESEND ERROR:', error);
-            // Check for domain verification error
-            if (error.message && (error.message.includes("can only send to yourself") || error.message.includes("verify a domain"))) {
-                console.error("==================================================================");
-                console.error(`[CRITICAL] Resend Domain Verification Required!`);
-                console.error(`You are trying to send an email to '${email}' but your Resend domain is not verified.`);
-                console.error(`In 'Test Mode', you can ONLY send emails to the address you signed up with.`);
-                console.error(`Please verify your domain at https://resend.com/domains or use your registered email for testing.`);
-                console.error("==================================================================");
-                throw new Error(`Email Failed: Domain not verified. You can only send to your own email in test mode.`);
-            }
-            throw new Error(error.message);
-        }
-
-        console.log('OTP Email Sent:', data);
-        return data;
+        console.log('OTP Email Sent:', info.messageId);
+        return info;
     } catch (error) {
-        console.error('CRITICAL EMAIL ERROR:', error);
+        console.error('CRITICAL EMAIL ERROR (OTP):', error);
         throw error;
     }
 };

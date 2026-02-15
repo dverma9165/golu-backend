@@ -63,12 +63,23 @@ exports.register = async (req, res) => {
 
 exports.verifyOtp = async (req, res) => {
     const { userId, otp } = req.body;
+    console.log(`[VerifyOTP] Request received. UserId: ${userId}, OTP: ${otp} (Type: ${typeof otp})`);
+
     try {
         // Find in Pending
         let pendingUser = await PendingUser.findById(userId);
-        if (!pendingUser) return res.status(400).json({ msg: 'Invalid or Expired Request' });
+        if (!pendingUser) {
+            console.log(`[VerifyOTP] PendingUser not found for ID: ${userId}`);
+            return res.status(400).json({ msg: 'Invalid or Expired Request' });
+        }
 
-        if (pendingUser.otp !== otp) return res.status(400).json({ msg: 'Invalid OTP' });
+        console.log(`[VerifyOTP] Found PendingUser: ${pendingUser.email}, Stored OTP: ${pendingUser.otp} (Type: ${typeof pendingUser.otp})`);
+
+        // Check for loose equality to handle string/number differences, just in case
+        if (String(pendingUser.otp) !== String(otp)) {
+            console.log(`[VerifyOTP] OTP Mismatch! Expected: ${pendingUser.otp}, Received: ${otp}`);
+            return res.status(400).json({ msg: 'Invalid OTP' });
+        }
 
         // Move to Real User Collection
         const newUser = new User({

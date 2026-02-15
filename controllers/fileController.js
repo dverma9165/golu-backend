@@ -281,7 +281,7 @@ exports.getMyOrders = async (req, res) => {
 
         const total = await Order.countDocuments({ user: req.user.id });
         const orders = await Order.find({ user: req.user.id })
-            .populate('product')
+            .populate('product', '-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -292,6 +292,53 @@ exports.getMyOrders = async (req, res) => {
             currentPage: page,
             totalOrders: total
         });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
+exports.downloadFree = async (req, res) => {
+    try {
+        const { productId } = req.body;
+        const userId = req.user.id;
+
+        const product = await Product.findById(productId);
+        if (!product) return res.status(404).json({ msg: 'Product not found' });
+
+        // Verify it is actually free
+        const isFree = (product.salePrice === 0) || (product.price === 0 && !product.salePrice);
+
+        if (!isFree) {
+            return res.status(400).json({ msg: 'This product is not free.' });
+        }
+
+        // Check if order exists
+        let order = await Order.findOne({
+            user: userId,
+            product: productId,
+            status: 'Approved'
+        });
+
+        // If not, create a free order record
+        if (!order) {
+            order = new Order({
+                user: userId,
+                product: productId,
+                customerName: req.user.name || 'Free User',
+                amount: 0,
+                status: 'Approved',
+                approvedAt: Date.now(),
+                utr: 'FREE-' + Date.now()
+            });
+            await order.save();
+        }
+
+        return res.json({
+            status: 'Approved',
+            downloadLink: product.sourceFile.downloadLink
+        });
+
     } catch (err) {
         console.error(err);
         res.status(500).send('Server Error');
@@ -499,7 +546,7 @@ exports.getProducts = async (req, res) => {
 
         const total = await Product.countDocuments(query);
         const products = await Product.find(query)
-            .select('-sourceFile')
+            .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink -reviews')
             .sort(sortOption)
             .skip(skip)
             .limit(limit);
@@ -518,7 +565,9 @@ exports.getProducts = async (req, res) => {
 
 exports.getProductById = async (req, res) => {
     try {
-        const product = await Product.findById(req.params.id).select('-sourceFile');
+        const product = await Product.findById(req.params.id)
+            .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink');
+
         if (!product) return res.status(404).json({ msg: 'Product not found' });
         res.json(product);
     } catch (err) {
@@ -651,7 +700,7 @@ exports.getFeedSections = async (req, res) => {
         const results = await Promise.all(
             sectionDefs.map(async (sec) => {
                 const items = await Product.find(sec.query)
-                    .select('-sourceFile')
+                    .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink -reviews')
                     .sort(sec.sort)
                     .limit(limit);
                 return { id: sec.id, items };

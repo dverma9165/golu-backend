@@ -54,7 +54,8 @@ app.delete('/api/auth/cart/:productId', auth, authController.removeFromCart);
 try {
     app.use('/api/files', require('./routes/fileRoutes'));
     app.use('/api/notifications', require('./routes/notificationRoutes'));
-    app.use('/api/payment', require('./routes/paymentRoutes')); // Added Payment Routes
+    app.use('/api/payment', require('./routes/paymentRoutes'));
+    app.use('/api/coupons', require('./routes/couponRoutes')); // Added Coupon Routes
 } catch (e) {
     console.error("FileRoutes Error", e);
 }
