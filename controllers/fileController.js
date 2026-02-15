@@ -549,10 +549,11 @@ exports.getProducts = async (req, res) => {
 
         const total = await Product.countDocuments(query);
         const products = await Product.find(query)
-            .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink -reviews')
+            .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink -reviews') // Exclude heavy/private fields
             .sort(sortOption)
             .skip(skip)
-            .limit(limit);
+            .limit(limit)
+            .lean();
 
         res.json({
             files: products,
@@ -641,8 +642,19 @@ exports.addReview = async (req, res) => {
 };
 
 // === FEED SECTIONS (single endpoint for all home feed data) ===
+// Simple In-Memory Cache for Feed Query
+let feedCache = null;
+let feedCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 Minutes
+
 exports.getFeedSections = async (req, res) => {
     try {
+        // Check Cache
+        const now = Date.now();
+        if (feedCache && (now - feedCacheTime < CACHE_DURATION)) {
+            return res.json({ sections: feedCache });
+        }
+
         const limit = 10;
 
         // Define all feed sections with their queries and sorts
@@ -705,7 +717,8 @@ exports.getFeedSections = async (req, res) => {
                 const items = await Product.find(sec.query)
                     .select('-sourceFile -__v -thumbnail.originalName -thumbnail.mimeType -thumbnail.viewLink -reviews')
                     .sort(sec.sort)
-                    .limit(limit);
+                    .limit(limit)
+                    .lean();
                 return { id: sec.id, items };
             })
         );
@@ -715,6 +728,10 @@ exports.getFeedSections = async (req, res) => {
         results.forEach(r => {
             sections[r.id] = r.items;
         });
+
+        // Set Cache
+        feedCache = sections;
+        feedCacheTime = Date.now();
 
         res.json({ sections });
     } catch (err) {

@@ -86,4 +86,13 @@ const ProductSchema = new mongoose.Schema({
     }
 });
 
+// Indexes for performance to speed up feed queries
+ProductSchema.index({ createdAt: -1 });
+ProductSchema.index({ category: 1 });
+ProductSchema.index({ rating: -1 });
+ProductSchema.index({ price: 1 });
+ProductSchema.index({ salePrice: 1 });
+ProductSchema.index({ fileType: 1 });
+ProductSchema.index({ fontsIncluded: 1 });
+
 module.exports = mongoose.model('Product', ProductSchema);
