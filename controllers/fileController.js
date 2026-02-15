@@ -359,18 +359,19 @@ exports.downloadPaid = async (req, res) => {
         if (!order.product) return res.status(404).json({ msg: 'Product no longer exists' });
 
         if (order.status === 'Approved') {
-            // Check Expiry (3 Days)
+            // Check Expiry (15 Days)
             // If approvedAt missing (legacy), maybe allow or default to createdAt? default allow for now.
             if (order.approvedAt) {
                 const now = new Date();
                 const approvedTime = new Date(order.approvedAt);
                 const diffTime = Math.abs(now - approvedTime);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                // 3 days limit (72 hours)
-                // Using 72 * 60 * 60 * 1000 for precision
-                if (diffTime > (72 * 60 * 60 * 1000)) {
-                    return res.status(403).json({ msg: 'Download link expired (Limit: 3 Days)' });
+                // 15 days limit (360 hours)
+                // Using 360 * 60 * 60 * 1000
+                if (diffTime > (360 * 60 * 60 * 1000)) {
+                    // Update status to Expired
+                    await Order.findByIdAndUpdate(orderId, { status: 'Expired' });
+                    return res.status(403).json({ msg: 'Download link expired (Limit: 15 Days)', status: 'Expired' });
                 }
             }
 
@@ -378,6 +379,8 @@ exports.downloadPaid = async (req, res) => {
                 status: 'Approved',
                 downloadLink: order.product.sourceFile.downloadLink
             });
+        } else if (order.status === 'Expired') {
+            return res.status(403).json({ msg: 'Download link expired (Limit: 15 Days)', status: 'Expired' });
         } else {
             return res.json({ status: order.status });
         }
