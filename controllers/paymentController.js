@@ -223,12 +223,10 @@ exports.verifyPayment = async (req, res) => {
 
             try {
                 // Send email to user
-                // Note: We might want to send one email for bulk, or individual.
-                // Current emailService might need update or we reuse existing loop.
                 for (const order of createdOrders) {
                     const productDetails = products.find(p => p._id.toString() === order.product.toString());
                     if (productDetails) {
-                        await emailService.sendOrderNotification(order, productDetails, customerName || user.name, newOrder.utr);
+                        await emailService.sendOrderNotification(order, productDetails, customerName || user.name, order.utr);
                     }
                 }
             } catch (emailErr) {
