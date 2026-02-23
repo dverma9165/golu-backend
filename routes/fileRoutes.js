@@ -40,6 +40,7 @@ router.post('/review/:id', auth, fileController.addReview);
 
 // Public Routes
 router.get('/', fileController.getProducts);
+router.get('/active-categories', fileController.getActiveCategories);
 router.get('/feed', fileController.getFeedSections);
 router.get('/:id', fileController.getProductById);
 

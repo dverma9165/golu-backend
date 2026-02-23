@@ -581,6 +581,16 @@ exports.getProductById = async (req, res) => {
     }
 };
 
+exports.getActiveCategories = async (req, res) => {
+    try {
+        const categories = await Product.distinct('category');
+        res.json(categories);
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Server Error');
+    }
+};
+
 exports.addReview = async (req, res) => {
     try {
         const { rating, comment } = req.body;
